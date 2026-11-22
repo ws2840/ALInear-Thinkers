@@ -14,6 +14,10 @@ execute:
   echo: false
   warning: false
   message: false
+
+engine: knitr
+editor:
+  render-on-save: true
 ---
 
 ## Project Goals
