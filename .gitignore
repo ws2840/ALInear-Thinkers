@@ -1,3 +1,6 @@
+final_project_proposal.rmarkdown
+final_project_proposal_files/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -218,3 +221,4 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+Rplots.pdf

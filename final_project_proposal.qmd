@@ -9,6 +9,15 @@ format:
     geometry: margin=1in
     toc: false
     number-sections: false
+    fig-pos: "H"
+execute:
+  echo: false
+  warning: false
+  message: false
+
+engine: knitr
+editor:
+  render-on-save: true
 ---
 
 ## Project Goals
@@ -19,15 +28,83 @@ format:
 
 #### Inovation Points
 
-- AI extension (etc)
+- **AI extension:** Beyond traditional macroeconomic predictors, we add country-level generative-AI adoption ("AI User Share") as a novel regressor to test whether AI diffusion explains variation in GDP that classical factors (labor, capital, trade, etc.) leave unexplained.
 
 ## Data Description
 
 - [source1]
+- **AI Diffusion Report (Microsoft)** — [github.com/microsoft/ai-diffusion-report](https://github.com/microsoft/ai-diffusion-report). Country-level *AI User Share* (share of population using generative AI), estimated from anonymized Microsoft telemetry and updated every 3–6 months.
 
 ## Insightful Statistics
 
+```{r}
+#| label: ai-setup
+#| include: false
+library(ggplot2)
+
+ai_raw <- read.csv("data/ai/AI_Diffusion_Q22026_Update.csv", check.names = FALSE)
+periods <- c("H1 2025", "H2 2025", "Q1 2026", "Q2 2026")
+ai_long <- data.frame(
+  Economy = rep(ai_raw$Economy, times = length(periods)),
+  Period  = factor(rep(periods, each = nrow(ai_raw)), levels = periods),
+  Share   = as.numeric(sub("%", "", unlist(ai_raw[-1])))
+)
+ai_q2 <- subset(ai_long, Period == "Q2 2026")
+
+ai_wide <- sapply(split(ai_long$Share, ai_long$Period), identity)
+ai_gain <- ai_wide[, "Q2 2026"] - ai_wide[, "H1 2025"]
+names(ai_gain) <- ai_raw$Economy
+top_gain <- sort(ai_gain, decreasing = TRUE)[1:2]
+us <- ai_wide[ai_raw$Economy == "United States", ]
+us_rank <- rank(-ai_wide[, "Q2 2026"], ties.method = "min")[ai_raw$Economy == "United States"]
+```
+
+### AI Adoption
+
+```{r}
+#| label: tbl-ai-stats
+#| tbl-cap: "Summary of AI User Share (%) across 147 economies, by period."
+ai_stats <- t(apply(ai_wide, 2, function(x)
+  c(Mean = mean(x), Median = median(x), SD = sd(x), Min = min(x), Max = max(x))))
+knitr::kable(ai_stats, digits = 1)
+```
+
+- AI adoption rose in all `r nrow(ai_wide)` economies between H1 2025 and Q2 2026; the median share grew from `r median(ai_wide[, "H1 2025"])`% to `r median(ai_wide[, "Q2 2026"])`%, a median gain of `r median(ai_gain)` percentage points.
+- The distribution is right-skewed (mean `r round(mean(ai_wide[, "Q2 2026"]), 1)`% vs. median `r median(ai_wide[, "Q2 2026"])`% in Q2 2026), and the spread is widening (SD `r round(sd(ai_wide[, "H1 2025"]), 1)` → `r round(sd(ai_wide[, "Q2 2026"]), 1)`), so leading countries are pulling further ahead.
+- The largest gains came from `r names(top_gain)[1]` (+`r top_gain[1]` pp) and `r names(top_gain)[2]` (+`r top_gain[2]` pp). The United States ranks #`r us_rank` of `r nrow(ai_wide)` at `r us["Q2 2026"]`%.
+
 ## Summary Plots
+
+### AI Adoption
+
+```{r}
+#| label: fig-ai-dist
+#| fig-cap: "Distribution of AI User Share across 147 economies, by period. Adoption rises steadily, and the spread between countries widens over time."
+#| fig-width: 6
+#| fig-height: 3.2
+ggplot(ai_long, aes(Period, Share)) +
+  geom_boxplot(fill = "#9ecae1", outlier.size = 1) +
+  labs(x = NULL, y = "AI User Share (%)") +
+  theme_minimal(base_size = 11)
+```
+
+```{r}
+#| label: fig-ai-top
+#| fig-cap: "The 15 economies with the highest and lowest AI User Share in Q2 2026."
+#| fig-width: 6.5
+#| fig-height: 4.5
+ai_q2 <- ai_q2[order(ai_q2$Share), ]
+ext <- rbind(head(ai_q2, 15), tail(ai_q2, 15))
+ext$Group <- rep(c("Bottom 15", "Top 15"), each = 15)
+ext$Economy <- factor(ext$Economy, levels = ext$Economy)
+ggplot(ext, aes(Share, Economy, fill = Group)) +
+  geom_col() +
+  facet_wrap(~ Group, scales = "free_y") +
+  scale_fill_manual(values = c("Bottom 15" = "#fdae6b", "Top 15" = "#3182bd"),
+                    guide = "none") +
+  labs(x = "AI User Share, Q2 2026 (%)", y = NULL) +
+  theme_minimal(base_size = 10)
+```
 
 ## Team Members
 
