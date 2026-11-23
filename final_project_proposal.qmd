@@ -24,7 +24,12 @@ editor:
 
 ### Overall Description
 
-This project studies what drives a country's economic output, using multiple linear regression on a panel of 20 economies: 10 developed (United States, United Kingdom, Germany, France, Japan, Canada, Italy, Australia, South Korea, Singapore) and 10 developing (China, India, Brazil, Mexico, Indonesia, South Africa, Nigeria, Egypt, Vietnam, Kenya). For each country and year, we combine GDP, population, population structure, indicators from the World Happiness Report (WHR), and generative-AI adoption from Microsoft's AI Economy Institute.
+This project studies what drives a country's economic output, using multiple linear regression on a panel of 20 economies: 
+
+- 10 developed (United States, United Kingdom, Germany, France, Japan, Canada, Italy, Australia, South Korea, Singapore) and 
+- 10 developing (China, India, Brazil, Mexico, Indonesia, South Africa, Nigeria, Egypt, Vietnam, Kenya). 
+
+For each country and year, we combine GDP, population, population structure, indicators from the World Happiness Report (WHR), and generative-AI adoption from Microsoft's AI Economy Institute.
 
 After collecting the data, we will remove missing values, apply a natural-log transformation to scale-dependent variables such as total GDP and population (dummy and percentage variables are left unchanged), and merge all sources by country and year. Exploratory plots of variable pairs, such as GDP against population, will help us spot relationships and needed transformations before modeling.
 
