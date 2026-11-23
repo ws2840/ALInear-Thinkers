@@ -1,6 +1,6 @@
 ---
 title: "Project Proposal: What Moves GDP? Modeling Economic Output with Multiple Linear Regression"
-author: "Chengyu Sun, Fengyi Wang, Wen Sheng"
+author: "Chengyu Sun(cs4765), Fengyi Wang(fw2465), Wen Sheng(ws2840)"
 date: today
 format:
   pdf:
@@ -50,6 +50,8 @@ We also add two indicator variables to capture structural shifts:
 
 - **AI extension:** Beyond traditional macroeconomic predictors, we add country-level generative-AI adoption ("AI User Share") as a novel regressor to test whether AI diffusion explains variation in GDP that demographic and well-being factors (population, population structure, WHR indicators) leave unexplained.
 
+- **New GDP Model:** Using WHR data, we can examine how GDP correlates with social factors such as corruption, generosity, and social fairness. We build on these existing dimensions by accounting for two recent shocks: the rapid rise of AI and the COVID pandemic. Specifically, we introduce AI usage as a new variable in the GDP model, alongside a COVID indicator that captures the pandemic's impact.
+
 ## Data Description
 
 - **World Happiness Report (WHR)** — [worldhappiness.report](https://worldhappiness.report). Annual country-level well-being data from the Gallup World Poll: an average life-evaluation score (0–10) plus supporting measures such as social support, healthy life expectancy, freedom, generosity, and perceived corruption. Variables used:
@@ -63,6 +65,7 @@ We also add two indicator variables to capture structural shifts:
     - *Generosity*: charitable donations relative to a country's wealth (a regression residual).
     - *Perceptions of corruption*: perceived extent of corruption in government and business.
     - *Dystopia + residual*: a hypothetical worst-case baseline plus the unexplained part of the happiness score.
+    - We use the WHR 2026 release (*Data for Figure 2.1*). Life evaluation covers 2011–2025 (no 2013); the factor columns are each factor's contribution to the life evaluation score and are available only for 2019–2025.
 - **AI Diffusion Report (Microsoft)** — [github.com/microsoft/ai-diffusion-report](https://github.com/microsoft/ai-diffusion-report). Country-level *AI User Share* (share of population using generative AI), estimated from anonymized Microsoft telemetry and updated every 3–6 months.
 
 ## Insightful Statistics
@@ -87,7 +90,7 @@ ai_long <- data.frame(
 )
 ai_long$Group <- factor(ifelse(ai_long$Economy %in% developed, "Developed", "Developing"),
                         levels = c("Developed", "Developing"))
-group_cols <- c("Developed" = "#3182bd", "Developing" = "#e6550d")
+group_cols <- c("Developed" = "#2a78d6", "Developing" = "#eb6834")
 
 ai_wide <- sapply(split(ai_long$Share, ai_long$Period), identity)
 rownames(ai_wide) <- ai_raw$Economy
@@ -95,6 +98,54 @@ ai_gain <- ai_wide[, "Q2 2026"] - ai_wide[, "H1 2025"]
 top_gain <- sort(ai_gain, decreasing = TRUE)[1:2]
 med <- function(g, p) median(ai_wide[if (g == "dev") developed else developing, p])
 ```
+
+```{r}
+#| label: whr-setup
+#| include: false
+library(readxl)
+
+whr <- as.data.frame(read_excel("data/whr/WHR26_Data_Figure_2.1.xlsx"))
+names(whr) <- c("Year", "Rank", "Country", "Life", "Lower", "Upper", "GDP", "Social",
+                "Health", "Freedom", "Generosity", "Corruption", "Dystopia")
+# align WHR country names with the AI data
+whr$Country[whr$Country == "Republic of Korea"] <- "South Korea"
+whr$Country[whr$Country == "Viet Nam"] <- "Vietnam"
+whr <- subset(whr, Country %in% c(developed, developing))
+whr$Group <- factor(ifelse(whr$Country %in% developed, "Developed", "Developing"),
+                    levels = c("Developed", "Developing"))
+
+factors <- c(GDP = "Log GDP per capita", Social = "Social support",
+             Health = "Healthy life expectancy", Freedom = "Freedom of choice",
+             Generosity = "Generosity", Corruption = "Low perceived corruption",
+             Dystopia = "Dystopia + residual")
+whr25 <- subset(whr, Year == 2025)
+whr_change <- merge(subset(whr, Year == 2011)[, c("Country", "Life")],
+                    whr25[, c("Country", "Life")], by = "Country", suffixes = c("11", "25"))
+whr_change$d <- whr_change$Life25 - whr_change$Life11
+whr_change <- whr_change[order(whr_change$d), ]
+grp_mean <- function(y, g) mean(whr$Life[whr$Year == y & whr$Group == g])
+```
+
+### World Happiness Report
+
+```{r}
+#| label: tbl-whr-stats
+#| tbl-cap: "Mean life evaluation and its WHR factor decomposition in 2025, by group. The factor rows add up to the life evaluation score; \"Share of gap\" is each factor's part of the developed–developing difference."
+cols <- c("Life", names(factors))
+whr_tab <- data.frame(
+  Component  = c("Life evaluation (total)", factors),
+  Developed  = colMeans(whr25[whr25$Group == "Developed", cols]),
+  Developing = colMeans(whr25[whr25$Group == "Developing", cols])
+)
+whr_tab$Gap <- whr_tab$Developed - whr_tab$Developing
+whr_tab$`Share of gap (%)` <- 100 * whr_tab$Gap / whr_tab$Gap[1]
+gap_share <- setNames(whr_tab$`Share of gap (%)`, c("Life", names(factors)))
+knitr::kable(whr_tab, digits = c(0, 2, 2, 2, 0), row.names = FALSE)
+```
+
+- In 2025, developed economies average a life evaluation of `r sprintf("%.2f", grp_mean(2025, "Developed"))` versus `r sprintf("%.2f", grp_mean(2025, "Developing"))` for developing ones, but the groups overlap: `r whr25$Country[which.max(whr25$Life)]` (`r tolower(whr25$Group[which.max(whr25$Life)])`) has the highest score in our sample (`r max(whr25$Life)`) and `r whr25$Country[which.min(whr25$Life)]` the lowest (`r min(whr25$Life)`).
+- Log GDP per capita (`r round(gap_share["GDP"])`%) and healthy life expectancy (`r round(gap_share["Health"])`%) account for most of the happiness gap, followed by social support (`r round(gap_share["Social"])`%). Freedom and generosity contribute almost nothing, and the negative residual share (`r round(gap_share["Dystopia"])`%) means developing countries are happier than their measured factors predict.
+- The gap is narrowing: it fell from `r sprintf("%.2f", grp_mean(2011, "Developed") - grp_mean(2011, "Developing"))` points in 2011 to `r sprintf("%.2f", grp_mean(2025, "Developed") - grp_mean(2025, "Developing"))` in 2025. The biggest gains came from `r whr_change$Country[20]` (+`r sprintf("%.2f", whr_change$d[20])`) and `r whr_change$Country[19]` (+`r sprintf("%.2f", whr_change$d[19])`), and the biggest declines from `r whr_change$Country[1]` (`r sprintf("%.2f", whr_change$d[1])`) and `r whr_change$Country[2]` (`r sprintf("%.2f", whr_change$d[2])`).
 
 ### AI Adoption
 
@@ -114,6 +165,76 @@ knitr::kable(ai_stats, digits = 1, row.names = FALSE)
 - Variation within groups is large: among developed economies, shares range from `r min(ai_wide[developed, "Q2 2026"])`% (Japan) to `r max(ai_wide[developed, "Q2 2026"])`% (Singapore). The largest gains came from `r names(top_gain)[1]` (+`r top_gain[1]` pp) and `r names(top_gain)[2]` (+`r top_gain[2]` pp).
 
 ## Summary Plots
+
+### World Happiness Report
+
+```{r}
+#| label: fig-whr-trend
+#| fig-cap: "Life evaluation (3-year average) from 2011 to 2025 (no 2013 data). Thin lines are individual countries; thick lines are group means."
+#| fig-width: 6.5
+#| fig-height: 3.5
+whr_avg <- aggregate(Life ~ Year + Group, data = whr, FUN = mean)
+ggplot(whr, aes(Year, Life, colour = Group)) +
+  geom_line(aes(group = Country), alpha = 0.3, linewidth = 0.5) +
+  geom_line(data = whr_avg, linewidth = 1.4) +
+  scale_colour_manual(values = group_cols) +
+  scale_x_continuous(breaks = seq(2011, 2025, 2)) +
+  labs(x = NULL, y = "Life evaluation (0–10)", colour = NULL) +
+  theme_minimal(base_size = 10) +
+  theme(legend.position = "bottom", panel.grid.minor = element_blank())
+```
+
+```{r}
+#| label: fig-whr-decomp
+#| fig-cap: "What makes up each country's 2025 life evaluation: the WHR's six explanatory factors plus the unexplained Dystopia + residual. Bar length is the total score; group averages are in @tbl-whr-stats."
+#| fig-width: 6.5
+#| fig-height: 4.8
+decomp <- data.frame(
+  Country = rep(whr25$Country, times = length(factors)),
+  Group   = rep(whr25$Group, times = length(factors)),
+  Factor  = factor(rep(factors, each = nrow(whr25)), levels = rev(factors)),
+  Value   = unlist(whr25[, names(factors)])
+)
+decomp$Country <- factor(decomp$Country, levels = whr25$Country[order(whr25$Life)])
+factor_cols <- setNames(c("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4",
+                          "#008300", "#c3c2b7"), factors)
+ggplot(decomp, aes(Value, Country, fill = Factor)) +
+  geom_col(colour = "white", linewidth = 0.3, width = 0.75) +
+  geom_text(data = whr25, aes(Life, Country, label = sprintf("%.2f", Life)),
+            inherit.aes = FALSE, hjust = -0.15, size = 2.6, colour = "grey25") +
+  facet_wrap(~ Group, scales = "free_y") +
+  scale_fill_manual(values = factor_cols, breaks = unname(factors)) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.12))) +
+  labs(x = "Life evaluation, 2025", y = NULL, fill = NULL) +
+  theme_minimal(base_size = 9) +
+  theme(legend.position = "bottom", panel.grid.major.y = element_blank()) +
+  guides(fill = guide_legend(nrow = 2))
+```
+
+```{r}
+#| label: fig-whr-cor
+#| fig-cap: "Correlations among life evaluation and the WHR factors, pooled over 2019–2025 for our 20 countries (n = 140 country-years). Factor values are WHR contributions, which are rescaled versions of the underlying measures."
+#| fig-width: 5.5
+#| fig-height: 4.2
+cor_vars <- c(Life = "Life evaluation", factors[1:6])
+whr_recent <- subset(whr, Year >= 2019)
+cm <- cor(whr_recent[, names(cor_vars)])
+dimnames(cm) <- list(cor_vars, cor_vars)
+cor_df <- as.data.frame(as.table(cm))
+names(cor_df) <- c("A", "B", "r")
+keep <- as.integer(cor_df$A) > as.integer(cor_df$B)
+ggplot(cor_df[keep, ], aes(B, A, fill = r)) +
+  geom_tile(colour = "white", linewidth = 1) +
+  geom_text(aes(label = sprintf("%.2f", r)), size = 3, colour = "grey15") +
+  scale_fill_gradient2(low = "#e34948", mid = "#f0efec", high = "#2a78d6",
+                       midpoint = 0, limits = c(-1, 1)) +
+  scale_y_discrete(limits = rev) +
+  labs(x = NULL, y = NULL, fill = "r") +
+  theme_minimal(base_size = 9) +
+  theme(axis.text.x = element_text(angle = 35, hjust = 1), panel.grid = element_blank())
+```
+
+Life evaluation is closely tied to income: in @fig-whr-cor it correlates `r round(cm[1, 2], 2)` with log GDP per capita, and @fig-whr-decomp shows that much of the developed–developing difference comes from the GDP and health components. This makes the WHR measures promising predictors of GDP, but two cautions follow for our model. First, the WHR's log GDP per capita column is essentially our response variable, so we will use it only as a cross-check, not as a predictor. Second, social support, healthy life expectancy, and low perceived corruption are moderately correlated with each other and with GDP (`r round(min(cm[2, c(3, 4, 7)]), 2)`–`r round(max(cm[2, c(3, 4, 7)]), 2)`), so we will check variance inflation factors for collinearity. Generosity is nearly uncorrelated with everything else and may add little. Because the factor breakdown is only available from 2019, models using these factors will cover 2019–2025.
 
 ### AI Adoption
 
@@ -175,7 +296,3 @@ ggplot(gain_df, aes(Start, Gain, colour = Group)) +
 ```
 
 @fig-ai-dist and @fig-ai-dev show a clear and widening gap between developed and developing economies, and @fig-ai-gain suggests early adopters keep pulling ahead (correlation between starting share and gain: `r round(cor(gain_df$Start, gain_df$Gain), 2)`). This strong link between development level and AI adoption suggests AI use may help explain GDP, but also that richer countries adopt AI faster; our regression will need to account for this reverse causality.
-
-## Team Members
-
-Chengyu Sun(cs4765), Fengyi Wang(fw2465), Wen Sheng(ws2840)
