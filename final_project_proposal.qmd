@@ -48,7 +48,7 @@ We also add two indicator variables to capture structural shifts:
 - Test whether the COVID years show a significant shift in GDP.
 - Test whether AI adoption is associated with GDP after controlling for the other factors, and whether this relationship differs between developed and developing economies.
 
-#### Innovation Points
+### Innovation Points
 
 - **AI extension:** Beyond traditional macroeconomic predictors, we add country-level generative-AI adoption ("AI User Share") as a novel regressor to test whether AI diffusion explains variation in GDP that demographic and well-being factors (population, population structure, WHR indicators) leave unexplained.
 
