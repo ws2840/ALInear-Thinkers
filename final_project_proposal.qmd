@@ -54,6 +54,7 @@ We also add two indicator variables to capture structural shifts:
 
 ## Data Description
 
+- **World Bank World Development Indicators (WDI)** — [data.worldbank.org/indicator/NY.GDP.MKTP.KD](https://data.worldbank.org/indicator/NY.GDP.MKTP.KD). Annual country-level *GDP (constant 2015 US\$)*, indicator code NY.GDP.MKTP.KD: the total value of goods and services produced in a country, adjusted for inflation so that values are comparable across years. This is our response variable, which we log-transform before modeling. We downloaded 2005–2025 for all 20 countries through the World Bank API (last updated November 11, 2026; no missing values) and use 2011–2025 to match the WHR.
 - **World Happiness Report (WHR)** — [worldhappiness.report](https://worldhappiness.report). Annual country-level well-being data from the Gallup World Poll: an average life-evaluation score (0–10) plus supporting measures such as social support, healthy life expectancy, freedom, generosity, and perceived corruption. Variables used:
     - *Country name*: country or territory evaluated.
     - *Life evaluation (3-year average)*: average self-reported life satisfaction (0–10) over three years; the core happiness score.
@@ -126,6 +127,53 @@ whr_change <- whr_change[order(whr_change$d), ]
 grp_mean <- function(y, g) mean(whr$Life[whr$Year == y & whr$Group == g])
 ```
 
+```{r}
+#| label: gdp-setup
+#| include: false
+gdp <- read.csv("data/gdp/WB_GDP_constant2015USD.csv")
+gdp <- gdp[order(gdp$Country, gdp$Year), ]
+gdp$GDP_bn <- gdp$GDP_const2015_USD / 1e9
+gdp$Growth <- ave(gdp$GDP_bn, gdp$Country, FUN = function(x) c(NA, 100 * diff(x) / head(x, -1)))
+gdp <- subset(gdp, Year >= 2011)  # match WHR coverage (2011 growth uses 2010)
+gdp$Group <- factor(ifelse(gdp$Country %in% developed, "Developed", "Developing"),
+                    levels = c("Developed", "Developing"))
+
+g11 <- setNames(gdp$GDP_bn[gdp$Year == 2011], gdp$Country[gdp$Year == 2011])
+g25 <- setNames(gdp$GDP_bn[gdp$Year == 2025], gdp$Country[gdp$Year == 2025])
+gdp_mult <- sort(g25 / g11[names(g25)])
+gdp$Index <- 100 * gdp$GDP_bn / g11[gdp$Country]
+usd <- function(x) if (x >= 1000) sprintf("USD %.1f trillion", x / 1000) else sprintf("USD %.0f billion", x)
+dev_share <- function(y) {
+  d <- gdp[gdp$Year == y, ]
+  100 * sum(d$GDP_bn[d$Group == "Developed"]) / sum(d$GDP_bn)
+}
+grow <- function(g, yrs) mean(gdp$Growth[gdp$Group == g & gdp$Year %in% yrs])
+g20 <- gdp[gdp$Year == 2020, ]
+g20 <- g20[order(g20$Growth), ]
+```
+
+### GDP
+
+```{r}
+#| label: tbl-gdp-stats
+#| tbl-cap: "GDP (constant 2015 USD) for the 10 developed and 10 developing economies in our sample. Growth columns are the mean annual real GDP growth across countries in each period."
+gdp_tab <- do.call(rbind, lapply(levels(gdp$Group), function(g) {
+  d <- gdp[gdp$Group == g, ]
+  data.frame(Group = g,
+             `Median GDP 2011 (USD bn)` = median(d$GDP_bn[d$Year == 2011]),
+             `Median GDP 2025 (USD bn)` = median(d$GDP_bn[d$Year == 2025]),
+             `Growth 2011–19 (%)` = grow(g, 2011:2019),
+             `Growth 2020 (%)` = grow(g, 2020),
+             `Growth 2021–25 (%)` = grow(g, 2021:2025),
+             check.names = FALSE)
+}))
+knitr::kable(gdp_tab, digits = c(0, 0, 0, 1, 1, 1), row.names = FALSE)
+```
+
+- GDP spans more than two orders of magnitude: in 2025 it ranges from `r usd(min(g25))` (`r names(which.min(g25))`) to `r usd(max(g25))` (`r names(which.max(g25))`). This skew is why we model log GDP rather than GDP in levels.
+- Developing economies grew about twice as fast as developed ones before COVID (`r sprintf("%.1f", grow("Developing", 2011:2019))`% vs. `r sprintf("%.1f", grow("Developed", 2011:2019))`% a year), so the developed share of our sample's total GDP fell from `r round(dev_share(2011))`% in 2011 to `r round(dev_share(2025))`% in 2025. `r names(gdp_mult)[20]`, `r names(gdp_mult)[19]`, and `r names(gdp_mult)[18]` more than doubled their real GDP over the period, while `r names(gdp_mult)[1]` grew only `r round(100 * (gdp_mult[1] - 1))`%.
+- In 2020, `r sum(g20$Growth < 0)` of 20 economies shrank. Developed economies were hit harder on average (`r sprintf("%.1f", grow("Developed", 2020))`% vs. `r sprintf("%.1f", grow("Developing", 2020))`%), with the deepest drop in `r g20$Country[1]` (`r sprintf("%.1f", g20$Growth[1])`%); only `r knitr::combine_words(rev(g20$Country[g20$Growth > 0]))` kept growing.
+
 ### World Happiness Report
 
 ```{r}
@@ -165,6 +213,74 @@ knitr::kable(ai_stats, digits = 1, row.names = FALSE)
 - Variation within groups is large: among developed economies, shares range from `r min(ai_wide[developed, "Q2 2026"])`% (Japan) to `r max(ai_wide[developed, "Q2 2026"])`% (Singapore). The largest gains came from `r names(top_gain)[1]` (+`r top_gain[1]` pp) and `r names(top_gain)[2]` (+`r top_gain[2]` pp).
 
 ## Summary Plots
+
+### GDP
+
+```{r}
+#| label: fig-gdp-trend
+#| fig-cap: "Real GDP indexed to 2011 = 100. Thin lines are individual countries; thick lines are group medians. The grey band marks 2020."
+#| fig-width: 6.5
+#| fig-height: 3.5
+idx_med <- aggregate(Index ~ Year + Group, data = gdp, FUN = median)
+ggplot(gdp, aes(Year, Index, colour = Group)) +
+  annotate("rect", xmin = 2019.5, xmax = 2020.5, ymin = -Inf, ymax = Inf,
+           fill = "grey88") +
+  geom_hline(yintercept = 100, colour = "grey60", linewidth = 0.4) +
+  geom_line(aes(group = Country), alpha = 0.3, linewidth = 0.5) +
+  geom_line(data = idx_med, linewidth = 1.4) +
+  scale_colour_manual(values = group_cols) +
+  scale_x_continuous(breaks = seq(2011, 2025, 2)) +
+  labs(x = NULL, y = "Real GDP (2011 = 100)", colour = NULL) +
+  theme_minimal(base_size = 10) +
+  theme(legend.position = "bottom", panel.grid.minor = element_blank())
+```
+
+```{r}
+#| label: fig-gdp-growth
+#| fig-cap: "Annual real GDP growth for each country (points) and the group mean (lines). 2020 is the only year in which both group means are negative."
+#| fig-width: 6.5
+#| fig-height: 3.5
+grow_avg <- aggregate(Growth ~ Year + Group, data = gdp, FUN = mean)
+ggplot(gdp, aes(Year, Growth, colour = Group)) +
+  geom_hline(yintercept = 0, colour = "grey60", linewidth = 0.4) +
+  geom_point(position = position_dodge(width = 0.5), alpha = 0.45, size = 1.3) +
+  geom_line(data = grow_avg, linewidth = 1.1) +
+  scale_colour_manual(values = group_cols) +
+  scale_x_continuous(breaks = seq(2011, 2025, 2)) +
+  labs(x = NULL, y = "Real GDP growth (%)", colour = NULL) +
+  theme_minimal(base_size = 10) +
+  theme(legend.position = "bottom", panel.grid.minor = element_blank())
+```
+
+```{r}
+#| label: fig-gdp-ai
+#| fig-cap: "2025 real GDP (log scale) against AI User Share in H2 2025. Dashed lines are within-group least-squares fits."
+#| fig-width: 6
+#| fig-height: 4
+gdp_ai <- data.frame(Country = names(g25), GDP = g25 / 1000,
+                     AI = ai_wide[names(g25), "H2 2025"])
+gdp_ai$Group <- ifelse(gdp_ai$Country %in% developed, "Developed", "Developing")
+r_ai <- c(all = cor(log(gdp_ai$GDP), gdp_ai$AI),
+          sapply(split(gdp_ai, gdp_ai$Group), function(d) cor(log(d$GDP), d$AI)))
+# label placement to avoid overlaps: default above the point
+pos_ai <- c(Australia = "left", Canada = "right", "South Korea" = "left", Italy = "below", "United States" = "left",
+            China = "below")
+gdp_ai$pos <- ifelse(gdp_ai$Country %in% names(pos_ai), pos_ai[gdp_ai$Country], "above")
+gdp_ai$h <- c(above = 0.5, below = 0.5, left = 1.15, right = -0.15)[gdp_ai$pos]
+gdp_ai$v <- c(above = -0.9, below = 1.9, left = 0.5, right = 0.5)[gdp_ai$pos]
+ggplot(gdp_ai, aes(GDP, AI, colour = Group)) +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed", linewidth = 0.6) +
+  geom_point(size = 2.5) +
+  geom_text(aes(label = Country, hjust = h, vjust = v), size = 2.6, show.legend = FALSE) +
+  scale_colour_manual(values = group_cols) +
+  scale_x_log10(breaks = c(0.1, 0.3, 1, 3, 10, 30), labels = c("0.1", "0.3", "1", "3", "10", "30")) +
+  labs(x = "Real GDP 2025 (USD trillion, constant 2015, log scale)",
+       y = "AI User Share, H2 2025 (%)", colour = NULL) +
+  theme_minimal(base_size = 10) +
+  theme(legend.position = "bottom")
+```
+
+@fig-gdp-trend and @fig-gdp-growth show a steady upward trend in every country, faster in the developing group (median index `r round(idx_med$Index[idx_med$Year == 2025 & idx_med$Group == "Developing"])` vs. `r round(idx_med$Index[idx_med$Year == 2025 & idx_med$Group == "Developed"])` by 2025), interrupted by a sharp, shared dip in 2020 and a rebound in 2021. This supports a COVID indicator for 2020 in our model, and the rebound suggests 2021 may need separate handling. @fig-gdp-ai is a caution for our AI question: total GDP is only weakly related to AI adoption across the 20 countries (r = `r round(r_ai["all"], 2)`), and among developed economies the relationship is negative (r = `r round(r_ai["Developed"], 2)`) because small, rich Singapore leads in AI while the much larger United States and Japan lag. Total GDP largely reflects country size, so population must be controlled for before any AI effect can be judged.
 
 ### World Happiness Report
 
