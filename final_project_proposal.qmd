@@ -210,9 +210,9 @@ ai_stats <- ai_stats[order(ai_stats$Group, ai_stats$Period), ]
 knitr::kable(ai_stats, digits = 1, row.names = FALSE)
 ```
 
-- AI adoption rose in all `r nrow(ai_wide)` countries between H1 2025 and Q2 2026. The median developed economy went from `r med("dev", "H1 2025")`% to `r med("dev", "Q2 2026")`%, while the median developing economy went from `r med("devg", "H1 2025")`% to `r med("devg", "Q2 2026")`%.
-- Developed economies adopt AI at roughly `r round(med("dev", "Q2 2026") / med("devg", "Q2 2026"), 1)` times the rate of developing ones, and they are also gaining faster (median gain `r median(ai_gain[developed])` vs. `r median(ai_gain[developing])` percentage points), so the gap is widening.
-- Variation within groups is large: among developed economies, shares range from `r min(ai_wide[developed, "Q2 2026"])`% (Japan) to `r max(ai_wide[developed, "Q2 2026"])`% (Singapore). The largest gains came from `r names(top_gain)[1]` (+`r top_gain[1]` pp) and `r names(top_gain)[2]` (+`r top_gain[2]` pp).
+- AI adoption rose in all `r nrow(ai_wide)` countries from H1 2025 to Q2 2026: the developed median went from `r med("dev", "H1 2025")`% to `r med("dev", "Q2 2026")`% and the developing median from `r med("devg", "H1 2025")`% to `r med("devg", "Q2 2026")`%.
+- Developed economies adopt AI at roughly `r round(med("dev", "Q2 2026") / med("devg", "Q2 2026"), 1)` times the rate of developing ones, and they are also gaining faster (median gain `r median(ai_gain[developed])` vs. `r median(ai_gain[developing])` pp), so the gap is widening.
+- Within-group variation is large: developed shares range from `r min(ai_wide[developed, "Q2 2026"])`% (Japan) to `r max(ai_wide[developed, "Q2 2026"])`% (Singapore). The largest gains were in `r names(top_gain)[1]` (+`r top_gain[1]` pp) and `r names(top_gain)[2]` (+`r top_gain[2]` pp).
 
 ## Summary Plots
 
