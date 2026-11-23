@@ -236,7 +236,7 @@ ggplot(gdp, aes(Year, Index, colour = Group)) +
   geom_line(data = idx_med, linewidth = 1.4) +
   scale_colour_manual(values = group_cols) +
   scale_x_continuous(breaks = seq(2011, 2025, 2)) +
-  labs(x = NULL, y = "Real GDP (2011 = 100)", colour = NULL) +
+  labs(x = "Year", y = "Real GDP (2011 = 100)", colour = NULL) +
   theme_minimal(base_size = 10) +
   theme(legend.position = "bottom", panel.grid.minor = element_blank())
 grow_avg <- aggregate(Growth ~ Year + Group, data = gdp, FUN = mean)
@@ -246,7 +246,7 @@ ggplot(gdp, aes(Year, Growth, colour = Group)) +
   geom_line(data = grow_avg, linewidth = 1.1) +
   scale_colour_manual(values = group_cols) +
   scale_x_continuous(breaks = seq(2011, 2025, 2)) +
-  labs(x = NULL, y = "Real GDP growth (%)", colour = NULL) +
+  labs(x = "Year", y = "Real GDP growth (%)", colour = NULL) +
   theme_minimal(base_size = 10) +
   theme(legend.position = "bottom", panel.grid.minor = element_blank())
 ```
@@ -255,7 +255,7 @@ ggplot(gdp, aes(Year, Growth, colour = Group)) +
 #| label: fig-gdp-ai
 #| fig-cap: "2025 real GDP (log scale) against AI User Share in H2 2025. Dashed lines are within-group least-squares fits."
 #| fig-width: 5.5
-#| fig-height: 3.0
+#| fig-height: 4
 gdp_ai <- data.frame(Country = names(g25), GDP = g25 / 1000,
                      AI = ai_wide[names(g25), "H2 2025"])
 gdp_ai$Group <- ifelse(gdp_ai$Country %in% developed, "Developed", "Developing")
@@ -272,6 +272,7 @@ ggplot(gdp_ai, aes(GDP, AI, colour = Group)) +
   geom_point(size = 2.5) +
   geom_text(aes(label = Country, hjust = h, vjust = v), size = 2.6, show.legend = FALSE) +
   scale_colour_manual(values = group_cols) +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.12))) +
   scale_x_log10(breaks = c(0.1, 0.3, 1, 3, 10, 30), labels = c("0.1", "0.3", "1", "3", "10", "30")) +
   labs(x = "Real GDP 2025 (USD trillion, constant 2015, log scale)",
        y = "AI User Share, H2 2025 (%)", colour = NULL) +
@@ -285,7 +286,7 @@ ggplot(gdp_ai, aes(GDP, AI, colour = Group)) +
 
 ```{r}
 #| label: fig-whr
-#| fig-cap: "(a) Life evaluation (3-year average), 2011–2025 (no 2013 data); thick lines are group means. (b) Correlations among life evaluation and the WHR factor contributions, pooled over 2019–2025 (n = 140 country-years)."
+#| fig-cap: "Life evaluation in our 20 economies. (a) Life evaluation (3-year average), 2011–2025 (no 2013 data); thick lines are group means. (b) Correlations among life evaluation and the WHR factor contributions, pooled over 2019–2025 (n = 140 country-years)."
 #| fig-subcap:
 #|   - "Life evaluation over time"
 #|   - "Correlations, 2019–2025"
@@ -298,7 +299,7 @@ ggplot(whr, aes(Year, Life, colour = Group)) +
   geom_line(data = whr_avg, linewidth = 1.4) +
   scale_colour_manual(values = group_cols) +
   scale_x_continuous(breaks = seq(2011, 2025, 2)) +
-  labs(x = NULL, y = "Life evaluation (0–10)", colour = NULL) +
+  labs(x = "Year", y = "Life evaluation (0–10)", colour = NULL) +
   theme_minimal(base_size = 10) +
   theme(legend.position = "bottom", panel.grid.minor = element_blank())
 cor_vars <- c(Life = "Life evaluation", factors[1:6])
@@ -314,7 +315,7 @@ ggplot(cor_df[keep, ], aes(B, A, fill = r)) +
   scale_fill_gradient2(low = "#e34948", mid = "#f0efec", high = "#2a78d6",
                        midpoint = 0, limits = c(-1, 1)) +
   scale_y_discrete(limits = rev) +
-  labs(x = NULL, y = NULL, fill = "r") +
+  labs(x = "WHR measure", y = "WHR measure", fill = "r") +
   theme_minimal(base_size = 9) +
   theme(axis.text.x = element_text(angle = 35, hjust = 1), panel.grid = element_blank())
 ```
@@ -335,7 +336,7 @@ Life evaluation is closely tied to income: in @fig-whr-2 it correlates `r round(
 ggplot(ai_long, aes(Period, Share, fill = Group)) +
   geom_boxplot(outlier.size = 1, alpha = 0.8) +
   scale_fill_manual(values = group_cols) +
-  labs(x = NULL, y = "AI User Share (%)", fill = NULL) +
+  labs(x = "Period", y = "AI User Share (%)", fill = NULL) +
   theme_minimal(base_size = 11) +
   theme(legend.position = "bottom")
 dev <- subset(ai_long, Period %in% c("H1 2025", "Q2 2026"))
@@ -346,7 +347,7 @@ ggplot(dev, aes(Share, Economy)) +
   geom_point(aes(colour = Period), size = 2.5) +
   facet_wrap(~ Group, scales = "free_y") +
   scale_colour_manual(values = c("H1 2025" = "#9ecae1", "Q2 2026" = "#08519c")) +
-  labs(x = "AI User Share (%)", y = NULL, colour = NULL) +
+  labs(x = "AI User Share (%)", y = "Country", colour = NULL) +
   theme_minimal(base_size = 10) +
   theme(legend.position = "bottom")
 ```
@@ -355,7 +356,7 @@ ggplot(dev, aes(Share, Economy)) +
 #| label: fig-ai-gain
 #| fig-cap: "Starting AI User Share (H1 2025) against the gain through Q2 2026. Countries that started higher tended to gain more, so adoption is diverging rather than converging."
 #| fig-width: 6
-#| fig-height: 2.9
+#| fig-height: 4
 gain_df <- data.frame(Economy = rownames(ai_wide), Start = ai_wide[, "H1 2025"],
                       Gain = ai_gain,
                       Group = ifelse(rownames(ai_wide) %in% developed, "Developed", "Developing"))
@@ -371,7 +372,8 @@ ggplot(gain_df, aes(Start, Gain, colour = Group)) +
   geom_point(size = 2.5) +
   geom_text(aes(label = Economy, hjust = h, vjust = v), size = 2.6, show.legend = FALSE) +
   scale_colour_manual(values = group_cols) +
-  labs(x = "AI User Share, H1 2025 (%)", y = "Gain to Q2 2026 (percentage points)",
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.12))) +
+  labs(x = "AI User Share, H1 2025 (%)", y = "Gain by Q2 2026 (pp)",
        colour = NULL) +
   theme_minimal(base_size = 10) +
   theme(legend.position = "bottom")
