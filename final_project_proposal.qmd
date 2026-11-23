@@ -20,19 +20,34 @@ editor:
   render-on-save: true
 ---
 
-## Project Goals
+## Project Description
 
-[Overall description]
+### Overall Description
 
-- 
+This project studies what drives a country's economic output, using multiple linear regression on a panel of 20 economies: 10 developed (United States, United Kingdom, Germany, France, Japan, Canada, Italy, Australia, South Korea, Singapore) and 10 developing (China, India, Brazil, Mexico, Indonesia, South Africa, Nigeria, Egypt, Vietnam, Kenya). For each country and year, we combine GDP, population, population structure, indicators from the World Happiness Report (WHR), and generative-AI adoption from Microsoft's AI Economy Institute.
 
-#### Inovation Points
+After collecting the data, we will remove missing values, apply a natural-log transformation to scale-dependent variables such as total GDP and population (dummy and percentage variables are left unchanged), and merge all sources by country and year. Exploratory plots of variable pairs, such as GDP against population, will help us spot relationships and needed transformations before modeling.
 
-- **AI extension:** Beyond traditional macroeconomic predictors, we add country-level generative-AI adoption ("AI User Share") as a novel regressor to test whether AI diffusion explains variation in GDP that classical factors (labor, capital, trade, etc.) leave unexplained.
+We also add two indicator variables to capture structural shifts:
+
+- **COVID**: 1 for COVID-affected years and 0 otherwise, to compare GDP in pandemic and non-pandemic years.
+- **AI_start**: 1 for 2025 onward and 0 before. AI adoption data start in 2025, and generative AI was not widely used before then.
+
+### Goals
+
+- Identify which variables are significantly associated with GDP and rank them from strongest to weakest effect.
+- Explain why any variables are dropped from the final model (e.g., collinearity or lack of significance).
+- Describe each country's overall GDP trend and explain it using the variables in our data.
+- Test whether the COVID years show a significant shift in GDP.
+- Test whether AI adoption is associated with GDP after controlling for the other factors, and whether this relationship differs between developed and developing economies.
+
+#### Innovation Points
+
+- **AI extension:** Beyond traditional macroeconomic predictors, we add country-level generative-AI adoption ("AI User Share") as a novel regressor to test whether AI diffusion explains variation in GDP that demographic and well-being factors (population, population structure, WHR indicators) leave unexplained.
 
 ## Data Description
 
-- [source1]
+- 
 - **AI Diffusion Report (Microsoft)** — [github.com/microsoft/ai-diffusion-report](https://github.com/microsoft/ai-diffusion-report). Country-level *AI User Share* (share of population using generative AI), estimated from anonymized Microsoft telemetry and updated every 3–6 months.
 
 ## Insightful Statistics
@@ -105,6 +120,33 @@ ggplot(ext, aes(Share, Economy, fill = Group)) +
   labs(x = "AI User Share, Q2 2026 (%)", y = NULL) +
   theme_minimal(base_size = 10)
 ```
+
+```{r}
+#| label: fig-ai-dev
+#| fig-cap: "AI User Share in H1 2025 and Q2 2026 for 10 developed and 10 developing economies (IMF World Economic Outlook classification). Each line spans one country's growth over the period."
+#| fig-width: 6.5
+#| fig-height: 4.5
+developed  <- c("United States", "United Kingdom", "Germany", "France", "Japan",
+                "Canada", "Italy", "Australia", "South Korea", "Singapore")
+developing <- c("China", "India", "Brazil", "Mexico", "Indonesia",
+                "South Africa", "Nigeria", "Egypt", "Vietnam", "Kenya")
+dev <- subset(ai_long, Economy %in% c(developed, developing) &
+                       Period %in% c("H1 2025", "Q2 2026"))
+dev$Group <- factor(ifelse(dev$Economy %in% developed, "Developed", "Developing"),
+                    levels = c("Developed", "Developing"))
+dev_q2 <- subset(dev, Period == "Q2 2026")
+dev$Economy <- factor(dev$Economy, levels = dev_q2$Economy[order(dev_q2$Share)])
+ggplot(dev, aes(Share, Economy)) +
+  geom_line(aes(group = Economy), colour = "grey70", linewidth = 1) +
+  geom_point(aes(colour = Period), size = 2.5) +
+  facet_wrap(~ Group, scales = "free_y") +
+  scale_colour_manual(values = c("H1 2025" = "#9ecae1", "Q2 2026" = "#08519c")) +
+  labs(x = "AI User Share (%)", y = NULL, colour = NULL) +
+  theme_minimal(base_size = 10) +
+  theme(legend.position = "bottom")
+```
+
+In Q2 2026, the median developed economy in @fig-ai-dev had an AI User Share of `r median(dev_q2$Share[dev_q2$Economy %in% developed])`%, versus `r median(dev_q2$Share[dev_q2$Economy %in% developing])`% for developing economies. Developed economies also gained more over the period (median `r median(ai_gain[developed])` vs. `r median(ai_gain[developing])` percentage points), so the adoption gap is widening. This strong link between development level and AI adoption suggests AI use may help explain GDP, but also that richer countries adopt AI faster; our regression will need to account for this reverse causality.
 
 ## Team Members
 
