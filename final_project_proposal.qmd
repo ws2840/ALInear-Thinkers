@@ -52,7 +52,17 @@ We also add two indicator variables to capture structural shifts:
 
 ## Data Description
 
-- 
+- **World Happiness Report (WHR)** — [worldhappiness.report](https://worldhappiness.report). Annual country-level well-being data from the Gallup World Poll: an average life-evaluation score (0–10) plus supporting measures such as social support, healthy life expectancy, freedom, generosity, and perceived corruption. Variables used:
+    - *Country name*: country or territory evaluated.
+    - *Life evaluation (3-year average)*: average self-reported life satisfaction (0–10) over three years; the core happiness score.
+    - *Lower / Upper whisker*: lower and upper bounds of the confidence interval for the life evaluation score.
+    - *Log GDP per capita*: log GDP per person, reflecting material living standards.
+    - *Social support*: perceived availability of relatives or friends to rely on in times of trouble.
+    - *Healthy life expectancy*: expected years of life lived in good health at birth.
+    - *Freedom to make life choices*: satisfaction with one's freedom to choose what to do with one's life.
+    - *Generosity*: charitable donations relative to a country's wealth (a regression residual).
+    - *Perceptions of corruption*: perceived extent of corruption in government and business.
+    - *Dystopia + residual*: a hypothetical worst-case baseline plus the unexplained part of the happiness score.
 - **AI Diffusion Report (Microsoft)** — [github.com/microsoft/ai-diffusion-report](https://github.com/microsoft/ai-diffusion-report). Country-level *AI User Share* (share of population using generative AI), estimated from anonymized Microsoft telemetry and updated every 3–6 months.
 
 ## Insightful Statistics
@@ -62,36 +72,46 @@ We also add two indicator variables to capture structural shifts:
 #| include: false
 library(ggplot2)
 
+developed  <- c("United States", "United Kingdom", "Germany", "France", "Japan",
+                "Canada", "Italy", "Australia", "South Korea", "Singapore")
+developing <- c("China", "India", "Brazil", "Mexico", "Indonesia",
+                "South Africa", "Nigeria", "Egypt", "Vietnam", "Kenya")
+
 ai_raw <- read.csv("data/ai/AI_Diffusion_Q22026_Update.csv", check.names = FALSE)
+ai_raw <- subset(ai_raw, Economy %in% c(developed, developing))
 periods <- c("H1 2025", "H2 2025", "Q1 2026", "Q2 2026")
 ai_long <- data.frame(
   Economy = rep(ai_raw$Economy, times = length(periods)),
   Period  = factor(rep(periods, each = nrow(ai_raw)), levels = periods),
   Share   = as.numeric(sub("%", "", unlist(ai_raw[-1])))
 )
-ai_q2 <- subset(ai_long, Period == "Q2 2026")
+ai_long$Group <- factor(ifelse(ai_long$Economy %in% developed, "Developed", "Developing"),
+                        levels = c("Developed", "Developing"))
+group_cols <- c("Developed" = "#3182bd", "Developing" = "#e6550d")
 
 ai_wide <- sapply(split(ai_long$Share, ai_long$Period), identity)
+rownames(ai_wide) <- ai_raw$Economy
 ai_gain <- ai_wide[, "Q2 2026"] - ai_wide[, "H1 2025"]
-names(ai_gain) <- ai_raw$Economy
 top_gain <- sort(ai_gain, decreasing = TRUE)[1:2]
-us <- ai_wide[ai_raw$Economy == "United States", ]
-us_rank <- rank(-ai_wide[, "Q2 2026"], ties.method = "min")[ai_raw$Economy == "United States"]
+med <- function(g, p) median(ai_wide[if (g == "dev") developed else developing, p])
 ```
 
 ### AI Adoption
 
 ```{r}
 #| label: tbl-ai-stats
-#| tbl-cap: "Summary of AI User Share (%) across 147 economies, by period."
-ai_stats <- t(apply(ai_wide, 2, function(x)
-  c(Mean = mean(x), Median = median(x), SD = sd(x), Min = min(x), Max = max(x))))
-knitr::kable(ai_stats, digits = 1)
+#| tbl-cap: "Summary of AI User Share (%) for the 10 developed and 10 developing economies in our sample, by period."
+ai_stats <- aggregate(Share ~ Group + Period, data = ai_long, FUN = function(x)
+  c(Mean = mean(x), Median = median(x), SD = sd(x), Min = min(x), Max = max(x)))
+ai_stats <- do.call(data.frame, ai_stats)
+names(ai_stats) <- c("Group", "Period", "Mean", "Median", "SD", "Min", "Max")
+ai_stats <- ai_stats[order(ai_stats$Group, ai_stats$Period), ]
+knitr::kable(ai_stats, digits = 1, row.names = FALSE)
 ```
 
-- AI adoption rose in all `r nrow(ai_wide)` economies between H1 2025 and Q2 2026; the median share grew from `r median(ai_wide[, "H1 2025"])`% to `r median(ai_wide[, "Q2 2026"])`%, a median gain of `r median(ai_gain)` percentage points.
-- The distribution is right-skewed (mean `r round(mean(ai_wide[, "Q2 2026"]), 1)`% vs. median `r median(ai_wide[, "Q2 2026"])`% in Q2 2026), and the spread is widening (SD `r round(sd(ai_wide[, "H1 2025"]), 1)` → `r round(sd(ai_wide[, "Q2 2026"]), 1)`), so leading countries are pulling further ahead.
-- The largest gains came from `r names(top_gain)[1]` (+`r top_gain[1]` pp) and `r names(top_gain)[2]` (+`r top_gain[2]` pp). The United States ranks #`r us_rank` of `r nrow(ai_wide)` at `r us["Q2 2026"]`%.
+- AI adoption rose in all `r nrow(ai_wide)` countries between H1 2025 and Q2 2026. The median developed economy went from `r med("dev", "H1 2025")`% to `r med("dev", "Q2 2026")`%, while the median developing economy went from `r med("devg", "H1 2025")`% to `r med("devg", "Q2 2026")`%.
+- Developed economies adopt AI at roughly `r round(med("dev", "Q2 2026") / med("devg", "Q2 2026"), 1)` times the rate of developing ones, and they are also gaining faster (median gain `r median(ai_gain[developed])` vs. `r median(ai_gain[developing])` percentage points), so the gap is widening.
+- Variation within groups is large: among developed economies, shares range from `r min(ai_wide[developed, "Q2 2026"])`% (Japan) to `r max(ai_wide[developed, "Q2 2026"])`% (Singapore). The largest gains came from `r names(top_gain)[1]` (+`r top_gain[1]` pp) and `r names(top_gain)[2]` (+`r top_gain[2]` pp).
 
 ## Summary Plots
 
@@ -99,46 +119,23 @@ knitr::kable(ai_stats, digits = 1)
 
 ```{r}
 #| label: fig-ai-dist
-#| fig-cap: "Distribution of AI User Share across 147 economies, by period. Adoption rises steadily, and the spread between countries widens over time."
+#| fig-cap: "Distribution of AI User Share by period for developed and developing economies. Both groups rise steadily, but the developed group rises faster."
 #| fig-width: 6
 #| fig-height: 3.2
-ggplot(ai_long, aes(Period, Share)) +
-  geom_boxplot(fill = "#9ecae1", outlier.size = 1) +
-  labs(x = NULL, y = "AI User Share (%)") +
-  theme_minimal(base_size = 11)
-```
-
-```{r}
-#| label: fig-ai-top
-#| fig-cap: "The 15 economies with the highest and lowest AI User Share in Q2 2026."
-#| fig-width: 6.5
-#| fig-height: 4.5
-ai_q2 <- ai_q2[order(ai_q2$Share), ]
-ext <- rbind(head(ai_q2, 15), tail(ai_q2, 15))
-ext$Group <- rep(c("Bottom 15", "Top 15"), each = 15)
-ext$Economy <- factor(ext$Economy, levels = ext$Economy)
-ggplot(ext, aes(Share, Economy, fill = Group)) +
-  geom_col() +
-  facet_wrap(~ Group, scales = "free_y") +
-  scale_fill_manual(values = c("Bottom 15" = "#fdae6b", "Top 15" = "#3182bd"),
-                    guide = "none") +
-  labs(x = "AI User Share, Q2 2026 (%)", y = NULL) +
-  theme_minimal(base_size = 10)
+ggplot(ai_long, aes(Period, Share, fill = Group)) +
+  geom_boxplot(outlier.size = 1, alpha = 0.8) +
+  scale_fill_manual(values = group_cols) +
+  labs(x = NULL, y = "AI User Share (%)", fill = NULL) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "bottom")
 ```
 
 ```{r}
 #| label: fig-ai-dev
-#| fig-cap: "AI User Share in H1 2025 and Q2 2026 for 10 developed and 10 developing economies (IMF World Economic Outlook classification). Each line spans one country's growth over the period."
+#| fig-cap: "AI User Share in H1 2025 and Q2 2026 for each economy in our sample (IMF World Economic Outlook classification). Each line spans one country's growth over the period."
 #| fig-width: 6.5
 #| fig-height: 4.5
-developed  <- c("United States", "United Kingdom", "Germany", "France", "Japan",
-                "Canada", "Italy", "Australia", "South Korea", "Singapore")
-developing <- c("China", "India", "Brazil", "Mexico", "Indonesia",
-                "South Africa", "Nigeria", "Egypt", "Vietnam", "Kenya")
-dev <- subset(ai_long, Economy %in% c(developed, developing) &
-                       Period %in% c("H1 2025", "Q2 2026"))
-dev$Group <- factor(ifelse(dev$Economy %in% developed, "Developed", "Developing"),
-                    levels = c("Developed", "Developing"))
+dev <- subset(ai_long, Period %in% c("H1 2025", "Q2 2026"))
 dev_q2 <- subset(dev, Period == "Q2 2026")
 dev$Economy <- factor(dev$Economy, levels = dev_q2$Economy[order(dev_q2$Share)])
 ggplot(dev, aes(Share, Economy)) +
@@ -151,7 +148,33 @@ ggplot(dev, aes(Share, Economy)) +
   theme(legend.position = "bottom")
 ```
 
-In Q2 2026, the median developed economy in @fig-ai-dev had an AI User Share of `r median(dev_q2$Share[dev_q2$Economy %in% developed])`%, versus `r median(dev_q2$Share[dev_q2$Economy %in% developing])`% for developing economies. Developed economies also gained more over the period (median `r median(ai_gain[developed])` vs. `r median(ai_gain[developing])` percentage points), so the adoption gap is widening. This strong link between development level and AI adoption suggests AI use may help explain GDP, but also that richer countries adopt AI faster; our regression will need to account for this reverse causality.
+```{r}
+#| label: fig-ai-gain
+#| fig-cap: "Starting AI User Share (H1 2025) against the gain through Q2 2026. Countries that started higher tended to gain more, so adoption is diverging rather than converging."
+#| fig-width: 6
+#| fig-height: 4
+gain_df <- data.frame(Economy = rownames(ai_wide), Start = ai_wide[, "H1 2025"],
+                      Gain = ai_gain,
+                      Group = ifelse(rownames(ai_wide) %in% developed, "Developed", "Developing"))
+# label placement to avoid overlaps: default above the point
+pos <- c(Brazil = "below", Egypt = "below", "South Africa" = "right", Germany = "right",
+         Kenya = "right", India = "left", Indonesia = "left", Italy = "left")
+gain_df$pos <- ifelse(gain_df$Economy %in% names(pos), pos[gain_df$Economy], "above")
+gain_df$h <- c(above = 0.5, below = 0.5, left = 1.15, right = -0.15)[gain_df$pos]
+gain_df$v <- c(above = -0.9, below = 1.9, left = 0.5, right = 0.5)[gain_df$pos]
+ggplot(gain_df, aes(Start, Gain, colour = Group)) +
+  geom_smooth(aes(group = 1), method = "lm", se = FALSE, colour = "grey60",
+              linetype = "dashed", linewidth = 0.6) +
+  geom_point(size = 2.5) +
+  geom_text(aes(label = Economy, hjust = h, vjust = v), size = 2.6, show.legend = FALSE) +
+  scale_colour_manual(values = group_cols) +
+  labs(x = "AI User Share, H1 2025 (%)", y = "Gain to Q2 2026 (percentage points)",
+       colour = NULL) +
+  theme_minimal(base_size = 10) +
+  theme(legend.position = "bottom")
+```
+
+@fig-ai-dist and @fig-ai-dev show a clear and widening gap between developed and developing economies, and @fig-ai-gain suggests early adopters keep pulling ahead (correlation between starting share and gain: `r round(cor(gain_df$Start, gain_df$Gain), 2)`). This strong link between development level and AI adoption suggests AI use may help explain GDP, but also that richer countries adopt AI faster; our regression will need to account for this reverse causality.
 
 ## Team Members
 
